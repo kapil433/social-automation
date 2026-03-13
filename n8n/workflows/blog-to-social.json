@@ -1,0 +1,91 @@
+{
+  "name": "Blog to Social Media",
+  "nodes": [
+    {
+      "name": "RSS Feed Trigger",
+      "type": "n8n-nodes-base.rssFeedReadTrigger",
+      "parameters": {
+        "url": "https://kapil433.github.io/personal-blog/feed.xml",
+        "pollTimes": {"item": [{"mode": "everyHour"}]}
+      },
+      "notes": "Triggers when a new blog post is detected"
+    },
+    {
+      "name": "Filter New Posts",
+      "type": "n8n-nodes-base.filter",
+      "parameters": {},
+      "notes": "Only process posts published after last check"
+    },
+    {
+      "name": "Fetch Full Article",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{ $json.link }}"
+      },
+      "notes": "Fetch complete article text from URL"
+    },
+    {
+      "name": "Generate LinkedIn Copy",
+      "type": "n8n-nodes-base.anthropic",
+      "parameters": {
+        "model": "claude-sonnet-4-5",
+        "prompt": "See prompts/linkedin-prompt.md",
+        "maxTokens": 500
+      },
+      "notes": "Generate LinkedIn post: professional tone, bullet structure, max 1200 chars"
+    },
+    {
+      "name": "Generate Twitter Copy",
+      "type": "n8n-nodes-base.anthropic",
+      "parameters": {
+        "model": "claude-sonnet-4-5",
+        "prompt": "See prompts/twitter-prompt.md",
+        "maxTokens": 100
+      },
+      "notes": "Generate Twitter/X post: data hook, max 270 chars"
+    },
+    {
+      "name": "Telegram Approval Gate",
+      "type": "n8n-nodes-base.telegram",
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "NEW POST: {{ $json.title }}\n\n--- LINKEDIN ---\n{{ $node['Generate LinkedIn Copy'].json.text }}\n\n--- TWITTER ---\n{{ $node['Generate Twitter Copy'].json.text }}\n\nReply APPROVE, EDIT, or SKIP"
+      },
+      "notes": "Human-in-the-loop: Kapil approves before posting"
+    },
+    {
+      "name": "Wait for Approval",
+      "type": "n8n-nodes-base.wait",
+      "parameters": {"resume": "webhook"},
+      "notes": "Waits for Telegram reply: APPROVE / EDIT / SKIP"
+    },
+    {
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.linkedIn",
+      "parameters": {},
+      "notes": "Posts approved LinkedIn copy"
+    },
+    {
+      "name": "Post to Twitter",
+      "type": "n8n-nodes-base.twitter",
+      "parameters": {},
+      "notes": "Posts approved Twitter/X copy"
+    },
+    {
+      "name": "Log to Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "parameters": {
+        "table": "PostsLog",
+        "fields": ["date", "title", "platform", "url", "char_count"]
+      },
+      "notes": "Log all published posts for engagement tracking"
+    }
+  ],
+  "connections": {},
+  "_meta": {
+    "description": "Blog RSS -> Claude API -> Telegram approval -> LinkedIn + Twitter",
+    "version": "1.0",
+    "author": "kapil433",
+    "setup_instructions": "1. Set RSS Feed URL to your blog. 2. Add Anthropic API key in n8n credentials. 3. Add Telegram Bot token and your chat ID. 4. Add LinkedIn + Twitter API credentials. 5. Set Airtable base and table."
+  }
+}
